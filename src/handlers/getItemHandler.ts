@@ -1,31 +1,17 @@
 import { storage } from '../storage/index.js';
+import { success, failure } from '../shared/responses.js';
 
 export async function getItemHandler(id: string) {
   try {
     const item = await storage.getItem(id);
 
     if (!item) {
-      return {
-        statusCode: 404,
-        body: { error: 'Item not found' },
-      };
+      return failure(404, 'Item not found');
     }
 
-    return {
-      statusCode: 200,
-      body: item,
-    };
-  } catch (error) {
-    console.error('Error getting item:', error);
-    return {
-      statusCode: 500,
-      body: { error: 'Internal server error' },
-    };
+    return success(200, item);
+  } catch (err) {
+    console.error('Error getting item:', err);
+    return failure(500, 'Internal server error');
   }
 }
-
-// TODO: Implement other handlers:
-// - updateItemHandler
-// - listItemsHandler
-// - createVersionHandler
-// - getAuditTrailHandler
