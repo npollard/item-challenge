@@ -19,4 +19,7 @@ export function createStorage(): ItemStorage {
   return new MemoryStorage();
 }
 
+// Singleton instance for shared state across handlers
+export const storage = createStorage();
+
 export * from './interface.js';
