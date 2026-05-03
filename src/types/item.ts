@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 
+export const itemIdSchema = z.string().min(1, 'Item ID is required');
+
 export const createItemRequestSchema = z.object({
   subject: z.string().min(1),
   itemType: z.enum(['multiple-choice', 'free-response', 'essay']),
