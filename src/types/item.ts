@@ -2,6 +2,28 @@
  * Exam Item Types
  */
 
+import { z } from 'zod';
+
+export const createItemRequestSchema = z.object({
+  subject: z.string().min(1),
+  itemType: z.enum(['multiple-choice', 'free-response', 'essay']),
+  difficulty: z.number().int().min(1).max(5),
+  content: z.object({
+    question: z.string().min(1),
+    options: z.array(z.string()).optional(),
+    correctAnswer: z.string().min(1),
+    explanation: z.string().min(1),
+  }),
+  metadata: z.object({
+    author: z.string().min(1),
+    status: z.enum(['draft', 'review', 'approved', 'archived']),
+    tags: z.array(z.string()),
+  }),
+  securityLevel: z.enum(['standard', 'secure', 'highly-secure']),
+});
+
+export type CreateItemRequest = z.infer<typeof createItemRequestSchema>;
+
 export interface ExamItem {
   id: string;
   subject: string; // e.g., "AP Biology", "AP Calculus"
@@ -22,24 +44,6 @@ export interface ExamItem {
     tags: string[];
   };
   securityLevel: string; // "standard", "secure", "highly-secure"
-}
-
-export interface CreateItemRequest {
-  subject: string;
-  itemType: string;
-  difficulty: number;
-  content: {
-    question: string;
-    options?: string[];
-    correctAnswer: string;
-    explanation: string;
-  };
-  metadata: {
-    author: string;
-    status: string;
-    tags: string[];
-  };
-  securityLevel: string;
 }
 
 export interface UpdateItemRequest {
