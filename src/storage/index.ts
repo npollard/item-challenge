@@ -8,14 +8,15 @@
 import { ItemStorage } from './interface.js';
 import { MemoryStorage } from './memory.js';
 import { DynamoDBStorage } from './dynamodb.js';
+import { logger } from '../shared/logger.js';
 
 export function createStorage(): ItemStorage {
   if (process.env.USE_DYNAMODB === 'true') {
-    console.log('📦 Using DynamoDB storage');
+    logger.info('Using DynamoDB storage');
     return new DynamoDBStorage();
   }
 
-  console.log('📦 Using in-memory storage');
+  logger.info('Using in-memory storage');
   return new MemoryStorage();
 }
 

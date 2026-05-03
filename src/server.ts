@@ -8,6 +8,7 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { getItemHandler } from './handlers/getItemHandler.js';
 import { createItemHandler } from './handlers/createItemHandler.js';
+import { logger } from './shared/logger.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -21,7 +22,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   const parsedBody = body ? JSON.parse(body) : null;
 
-  console.log(`${method} ${url}`);
+  logger.info(`${method} ${url}`);
 
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -55,7 +56,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(result.body));
   } catch (error) {
-    console.error('Server error:', error);
+    logger.error(error, 'Server error');
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Internal server error' }));
   }
@@ -64,9 +65,5 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 const server = createServer(handleRequest);
 
 server.listen(PORT, () => {
-  console.log(`\n🚀 Server running at http://localhost:${PORT}`);
-  console.log(`\nExample endpoints:`);
-  console.log(`  POST   http://localhost:${PORT}/api/items`);
-  console.log(`  GET    http://localhost:${PORT}/api/items/:id`);
-  console.log(`\nPress Ctrl+C to stop\n`);
+  logger.info({ port: PORT, url: `http://localhost:${PORT}` }, 'Server started');
 });
