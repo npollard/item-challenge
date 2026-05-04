@@ -1,5 +1,23 @@
 # Architecture Documentation
 
+## Overview
+
+This system manages exam items with support for versioning, auditing, and scalable retrieval.
+It is designed to run locally for development but targets a **serverless AWS deployment** using:
+
+* API Gateway (HTTP API)
+* AWS Lambda
+* DynamoDB
+
+The architecture prioritizes:
+
+* Simplicity
+* Scalability
+* Clear data modeling
+* Minimal infrastructure
+
+---
+
 ## DynamoDB Storage Design
 
 ### Table Schema
@@ -43,97 +61,289 @@
 
 ---
 
-### Write Pattern - LATEST + VERSION
+### Write Pattern — LATEST + VERSION
 
-Each write operation that modifies an item creates:
+Each write that modifies an item produces two records:
 
-1. A new immutable version record:
+1. **Immutable version record**
 
-   ```txt
+   ```
    SK = VERSION#000001
    ```
 
-2. An updated current snapshot:
+2. **Current snapshot**
 
-   ```txt
+   ```
    SK = LATEST
    ```
 
-Both records contain the full item snapshot.
+Both records store the full item snapshot.
 
-Writes are performed using `TransactWriteItems` to ensure atomicity between the current state and version history.
+Writes are performed using **`TransactWriteItems`** to guarantee atomicity between the current state and version history.
 
-Optimistic locking is enforced by checking `metadata.version` in a condition expression to prevent concurrent writes from overwriting each other.
+---
 
-Version numbers are zero-padded (e.g., `VERSION#000001`) to ensure correct lexicographic ordering.
+### Optimistic Locking
+
+Updates enforce concurrency control using:
+
+```
+ConditionExpression: metadata.version = :expectedVersion
+```
+
+This prevents concurrent writes from overwriting each other.
+
+---
+
+### Version Ordering
+
+Version numbers are **zero-padded**:
+
+```
+VERSION#000001
+VERSION#000002
+```
+
+This ensures correct lexicographic ordering in DynamoDB queries.
 
 ---
 
 ### Global Listing (GSI1)
 
-To support the `GET /api/items` endpoint, all current items (`SK = LATEST`) include:
+To support `GET /api/items`, all `LATEST` records include:
 
-```txt
+```
 GSI1PK = ENTITY#ITEM
 GSI1SK = CREATED#<timestamp>
 ```
 
 This enables:
 
-* Efficient querying using a constant partition key
-* Sorting by creation timestamp
+* Efficient full-table listing without scans
+* Sorting by creation time
 * Cursor-based pagination using `LastEvaluatedKey`
 
-Version records (`VERSION#<n>`) do not include GSI attributes to avoid index bloat.
+Version records (`VERSION#<n>`) **do not include GSI attributes**, preventing index bloat.
 
 ---
 
-### Versioning Model
+## Versioning Model
 
-The system uses **change-driven versioning**:
+### Change-Driven Versioning (Primary)
 
-* Each update creates a new immutable version
-* Each version represents a full snapshot of the item
+* Every update creates a new immutable version
+* Each version represents a meaningful state transition
+* Full snapshots simplify reads and auditing
 
-#### Snapshot Versioning (`createVersion`)
+---
 
-The `createVersion` operation exists to satisfy the storage interface and provides snapshot-based versioning:
+### Snapshot Versioning (`createVersion`)
 
-* Creates a new version without requiring content changes
+The `createVersion` method exists to satisfy the interface and provides snapshot-based versioning:
+
+* Creates a new version without requiring changes
 * Increments version number
 * Updates timestamps
 
-This may produce versions that are identical except for metadata.
+This may produce identical versions (except metadata).
 
-This operation is intended for manual checkpoints or auditing, while `updateItem` remains the primary mechanism for version creation.
+Use cases:
+
+* Manual checkpoints
+* Audit snapshots
+* Draft preservation
 
 ---
 
-### Pagination and Filtering
+## Pagination and Filtering
 
-The in-memory implementation supports:
+### In-Memory Implementation
+
+Supports:
 
 * Offset-based pagination
 * Filtering by subject and status
 
-The DynamoDB implementation uses:
+---
 
-* Cursor-based pagination via `nextKey` (DynamoDB `LastEvaluatedKey`)
-* No filtering support (no GSIs defined for subject or status)
+### DynamoDB Implementation
 
-Unsupported query parameters are accepted but ignored.
+Supports:
 
-This reflects a common tradeoff where a generic interface does not perfectly map to all storage backends.
+* Cursor-based pagination via `nextKey` (`LastEvaluatedKey`)
+
+Does **not** support:
+
+* Offset-based pagination (inefficient in DynamoDB)
+* Filtering (no GSIs defined for subject/status)
+
+Unsupported parameters are accepted but ignored.
 
 ---
 
-### Design Trade-offs
+## Infrastructure (Terraform)
 
-* **Minimal GSIs**: Only indexes required by current API endpoints are implemented
-* **No filtering support**: Avoids unnecessary write amplification and index complexity
-* **Duplicate writes (LATEST + VERSION)**: Trades storage for fast reads and clean audit history
-* **Cursor-based pagination**: Scales efficiently compared to offset-based pagination
-* **Flexible evolution**: Additional GSIs can be added later as new access patterns emerge
+### Overview
+
+The system is deployed using a serverless architecture:
+
+* **API Gateway (HTTP API)** routes requests
+* **AWS Lambda** executes business logic
+* **DynamoDB** stores persistent data
+
+---
+
+### Key Infrastructure Decisions
+
+#### API Gateway (HTTP API)
+
+Chosen because:
+
+* Lower cost and latency than REST API
+* Simpler configuration
+* Sufficient for proxy-based routing
+
+Uses:
+
+```
+ANY /{proxy+}
+```
+
+Lambda handles routing internally.
+
+---
+
+#### Lambda
+
+A **single Lambda function** is used.
+
+Benefits:
+
+* Simple deployment
+* Minimal infrastructure
+
+Trade-offs:
+
+* Larger function size
+* Less isolation between endpoints
+
+---
+
+#### DynamoDB
+
+* Uses **PAY_PER_REQUEST**
+* Single-table design
+* One GSI aligned with listing endpoint
+
+Benefits:
+
+* No capacity planning
+* Automatic scaling
+
+---
+
+#### IAM
+
+Lambda is granted least-privilege access:
+
+* `dynamodb:GetItem`
+* `dynamodb:PutItem`
+* `dynamodb:Query`
+* `dynamodb:UpdateItem`
+* `dynamodb:TransactWriteItems`
+
+Access is scoped to:
+
+* The table
+* Its indexes
+
+---
+
+## Scalability
+
+This architecture scales automatically:
+
+* **Lambda** scales horizontally
+* **DynamoDB** scales via on-demand mode
+* **API Gateway** handles traffic distribution
+
+---
+
+### Future Improvements
+
+* Split Lambda into **per-endpoint functions**
+* Introduce **caching layer** (API Gateway / Redis)
+* Add **read replicas / access pattern GSIs**
+* Implement **TTL or archival for old versions**
+
+---
+
+## Observability
+
+### Current
+
+* CloudWatch logs via Lambda
+
+---
+
+### Improvements
+
+* Configure **log retention policies**
+* Add **structured logging (JSON)**
+* Enable **API Gateway access logs**
+* Add **CloudWatch metrics + alarms**:
+
+  * Error rates
+  * Latency
+  * Throttling
+
+Optional:
+
+* AWS X-Ray for tracing
+
+---
+
+## Security
+
+### Current
+
+* IAM-based access between Lambda and DynamoDB
+
+---
+
+### Improvements
+
+* Enable **KMS encryption for environment variables**
+* Add **authentication (JWT / Cognito / IAM)**
+* Restrict access via:
+
+  * API Gateway authorizers
+  * AWS WAF
+* Separate environments into **different AWS accounts**
+
+---
+
+## Trade-offs
+
+| Decision                 | Benefit      | Trade-off                 |
+| ------------------------ | ------------ | ------------------------- |
+| Single Lambda            | Simplicity   | Less isolation            |
+| HTTP API                 | Lower cost   | Fewer advanced features   |
+| Minimal GSIs             | Lower cost   | Limited querying          |
+| Cursor pagination        | Scalable     | More complex client logic |
+| Full snapshot versioning | Simple reads | More storage              |
+
+---
+
+## Future Work
+
+If extended further:
+
+* Add CI/CD pipeline for Terraform + Lambda
+* Introduce per-endpoint Lambdas
+* Add API Gateway request validation
+* Implement rate limiting and throttling
+* Add integration tests with DynamoDB Local
 
 ---
 
