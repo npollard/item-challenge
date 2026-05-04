@@ -6,8 +6,8 @@
  */
 
 import { logger } from '../shared/logger.js';
+import { ItemStorage } from '../types/storage.js';
 import { DynamoDBStorage } from './dynamodb.js';
-import { ItemStorage } from './interface.js';
 import { MemoryStorage } from './memory.js';
 
 export function createStorage(): ItemStorage {
@@ -23,4 +23,4 @@ export function createStorage(): ItemStorage {
 // Singleton instance for shared state across handlers
 export const storage = createStorage();
 
-export * from './interface.js';
+export { ItemStorage } from '../types/storage.js';

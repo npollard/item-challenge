@@ -6,8 +6,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import { ExamItem, CreateItemRequest, UpdateItemRequest, ListItemsQuery } from '../types/item.js';
-import { ItemStorage } from './interface.js';
+import { CreateItemRequest, ExamItem, ListItemsQuery, UpdateItemRequest } from '../types/item.js';
+import { ItemStorage } from '../types/storage.js';
 
 export class MemoryStorage implements ItemStorage {
   private items: Map<string, ExamItem> = new Map();

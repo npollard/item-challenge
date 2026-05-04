@@ -23,18 +23,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { CreateItemRequest, ExamItem, ListItemsQuery, UpdateItemRequest } from '../types/item.js';
-import { ItemStorage } from './interface.js';
-
-interface DynamoDBItem extends ExamItem {
-  PK: string;
-  SK: string;
-  GSI1PK?: string;
-  GSI1SK?: string;
-  GSI2PK?: string;
-  GSI2SK?: string;
-  GSI3PK?: string;
-  GSI3SK?: string;
-}
+import { DynamoDBItem, ItemStorage } from '../types/storage.js';
 
 export class DynamoDBStorage implements ItemStorage {
   private client: DynamoDBDocumentClient;

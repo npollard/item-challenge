@@ -1,11 +1,8 @@
 /**
- * Storage Interface
- *
- * This interface defines the contract for item storage.
- * Implement this interface for different storage backends (in-memory, DynamoDB, etc.)
+ * Storage Types
  */
 
-import { ExamItem, CreateItemRequest, UpdateItemRequest, ListItemsQuery } from '../types/item.js';
+import { CreateItemRequest, ExamItem, ListItemsQuery, UpdateItemRequest } from './item.js';
 
 export interface ItemStorage {
   createItem(data: CreateItemRequest): Promise<ExamItem>;
@@ -14,4 +11,15 @@ export interface ItemStorage {
   listItems(query: ListItemsQuery): Promise<{ items: ExamItem[]; total: number }>;
   createVersion(id: string): Promise<ExamItem | null>;
   getAuditTrail(id: string): Promise<ExamItem[]>;
+}
+
+export interface DynamoDBItem extends ExamItem {
+  PK: string;
+  SK: string;
+  GSI1PK?: string;
+  GSI1SK?: string;
+  GSI2PK?: string;
+  GSI2SK?: string;
+  GSI3PK?: string;
+  GSI3SK?: string;
 }
