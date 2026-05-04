@@ -1,6 +1,7 @@
+import type { Logger } from '../shared/logger.js';
 import { failure } from '../shared/responses.js';
 
-export async function getAuditTrailHandler() {
+export async function getAuditTrailHandler(id: string, logger: Logger) {
   // TODO: Implement getAuditTrailHandler
   // - Extract item ID from route parameters
   // - Call storage.getAuditTrail(id)

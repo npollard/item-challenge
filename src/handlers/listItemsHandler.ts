@@ -1,3 +1,4 @@
+import type { Logger } from '../shared/logger.js';
 import { failure } from '../shared/responses.js';
 
 export async function listItemsHandler(query: Record<string, string>, logger: Logger) {

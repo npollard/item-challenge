@@ -108,7 +108,7 @@ resource "aws_iam_role_policy_attachment" "lambda_dynamo_attach" {
 resource "aws_lambda_function" "api" {
   function_name = "${var.lambda_name}-${var.env}"
   role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
+  handler       = "lambda.handler"
   runtime       = "nodejs20.x"
 
   s3_bucket = var.lambda_s3_bucket
