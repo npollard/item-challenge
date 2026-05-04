@@ -5,10 +5,10 @@
  * Defaults to in-memory storage for easy local development.
  */
 
+import { logger } from '../shared/logger.js';
+import { DynamoDBStorage } from './dynamodb.js';
 import { ItemStorage } from './interface.js';
 import { MemoryStorage } from './memory.js';
-import { DynamoDBStorage } from './dynamodb.js';
-import { logger } from '../shared/logger.js';
 
 export function createStorage(): ItemStorage {
   if (process.env.USE_DYNAMODB === 'true') {

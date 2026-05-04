@@ -6,8 +6,8 @@
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { getItemHandler } from './handlers/getItemHandler.js';
 import { createItemHandler } from './handlers/createItemHandler.js';
+import { getItemHandler } from './handlers/getItemHandler.js';
 import { logger } from './shared/logger.js';
 
 const PORT = process.env.PORT || 3000;
