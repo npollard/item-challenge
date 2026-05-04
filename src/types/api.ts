@@ -23,14 +23,17 @@ export const createItemRequestSchema = z.object({
 
 export type CreateItemRequest = z.infer<typeof createItemRequestSchema>;
 
-export interface UpdateItemRequest {
-  subject?: string;
-  itemType?: string;
-  difficulty?: number;
-  content?: Partial<ExamItem["content"]>;
-  metadata?: Partial<ExamItem["metadata"]>;
-  securityLevel?: string;
-}
+export const updateItemRequestSchema = createItemRequestSchema
+  .partial()
+  .extend({
+    content: createItemRequestSchema.shape.content.partial().optional(),
+    metadata: createItemRequestSchema.shape.metadata.partial().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided for update',
+  });
+
+export type UpdateItemRequest = z.infer<typeof updateItemRequestSchema>;
 
 export interface ListItemsQuery {
   limit?: number;
