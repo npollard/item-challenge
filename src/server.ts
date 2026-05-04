@@ -5,9 +5,9 @@
  * Run with: pnpm dev
  */
 
+import crypto from 'crypto';
 import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { createItemHandler } from './handlers/createItemHandler.js';
-import { getItemHandler } from './handlers/getItemHandler.js';
+import { handleRoute } from './router.js';
 import { logger } from './shared/logger.js';
 
 const PORT = process.env.PORT || 3000;
@@ -15,18 +15,44 @@ const PORT = process.env.PORT || 3000;
 async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const { method, url } = req;
 
+  const requestLogger = logger.child({
+    requestId: crypto.randomUUID(),
+    method,
+    path: url,
+  });
+
   // Parse request body
   let body = '';
-  req.on('data', chunk => body += chunk);
+  req.on('data', chunk => (body += chunk));
   await new Promise(resolve => req.on('end', resolve));
 
-  const parsedBody = body ? JSON.parse(body) : null;
+  let parsedBody: unknown = null;
 
-  logger.info(`${method} ${url}`);
+  try {
+    parsedBody = body ? JSON.parse(body) : null;
+  } catch (err) {
+    requestLogger.warn({ err }, 'Invalid JSON body');
+
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid JSON' }));
+    return;
+  }
+
+  // Parse query params
+  const query = url
+    ? Object.fromEntries(
+      new URL(url, `http://${req.headers.host}`).searchParams.entries()
+    )
+    : {};
+
+  requestLogger.info('Incoming request');
 
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, OPTIONS'
+  );
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (method === 'OPTIONS') {
@@ -36,27 +62,19 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   try {
-    let result;
-
-    // Example routes - implement your own routing logic
-    if (method === 'GET' && url === '/api/items/test') {
-      result = await getItemHandler('test');
-    } else if (method === 'POST' && url === '/api/items') {
-      result = await createItemHandler(parsedBody);
-    } else if (method === 'GET' && url?.startsWith('/api/items/')) {
-      const id = url.split('/').pop();
-      result = await getItemHandler(id!);
-    } else {
-      result = {
-        statusCode: 404,
-        body: { error: 'Route not found' },
-      };
-    }
+    const result = await handleRoute({
+      method,
+      path: url,
+      body: parsedBody,
+      query,
+      logger: requestLogger,
+    });
 
     res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(result.body));
-  } catch (error) {
-    logger.error(error, 'Server error');
+  } catch (err) {
+    requestLogger.error({ err }, 'Unhandled server error');
+
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Internal server error' }));
   }
@@ -65,5 +83,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 const server = createServer(handleRequest);
 
 server.listen(PORT, () => {
-  logger.info({ port: PORT, url: `http://localhost:${PORT}` }, 'Server started');
+  logger.info(
+    { port: PORT, url: `http://localhost:${PORT}` },
+    'Server started'
+  );
 });
