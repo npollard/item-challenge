@@ -1,24 +1,28 @@
-import { logger } from '../shared/logger.js';
+import type { Logger } from '../shared/logger.js';
 import { failure, success, validationFailure } from '../shared/responses.js';
 import { storage } from '../storage/index.js';
 import { createItemRequestSchema } from '../types/api.js';
 
-export async function createItemHandler(data: unknown, requestLogger: typeof logger) {
+export async function createItemHandler(data: unknown, requestLogger: Logger) {
   const validationResult = createItemRequestSchema.safeParse(data);
   if (!validationResult.success) {
+    requestLogger.warn({ error: validationResult.error }, 'Validation failed');
     return validationFailure(validationResult.error);
   }
 
-  const request = validationResult.data;
+  const createRequest = validationResult.data;
 
   try {
-    const item = await storage.createItem(request);
+    const item = await storage.createItem(createRequest);
 
-    logger.info({ itemId: item.id }, 'Item created');
+    requestLogger.info(
+      { itemId: item.id, version: item.metadata.version },
+      'Item created'
+    );
 
     return success(201, item);
   } catch (err) {
-    logger.error({ err }, 'Error creating item');
+    requestLogger.error({ err, createRequest }, 'Error creating item');
     return failure(500, 'Internal server error');
   }
 }

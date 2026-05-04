@@ -1,10 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createItemHandler } from "../handlers/createItemHandler.js";
 import { getItemHandler } from "../handlers/getItemHandler.js";
+import type { Logger } from "../shared/logger.js";
+
+const mockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn(() => mockLogger),
+} as unknown as Logger;
 
 describe("getItemHandler", () => {
   it("should return 404 for non-existent item", async () => {
-    const result = await getItemHandler("non-existent-id");
+    const result = await getItemHandler("non-existent-id", mockLogger);
 
     expect(result.statusCode).toBe(404);
     expect(result.body).toHaveProperty("error");
@@ -32,7 +40,7 @@ describe("getItemHandler", () => {
       securityLevel: "standard",
     };
 
-    const createResult = await createItemHandler(itemData);
+    const createResult = await createItemHandler(itemData, mockLogger);
     expect(createResult.body).toHaveProperty("id");
     if (!("id" in createResult.body)) {
       throw new Error("Item creation failed");
@@ -40,7 +48,7 @@ describe("getItemHandler", () => {
     const itemId = createResult.body.id;
 
     // Then retrieve it
-    const getResult = await getItemHandler(itemId);
+    const getResult = await getItemHandler(itemId, mockLogger);
 
     expect(getResult.statusCode).toBe(200);
     expect(getResult.body).toHaveProperty("id", itemId);

@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createItemHandler } from "../handlers/createItemHandler.js";
+import type { Logger } from "../shared/logger.js";
+
+const mockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn(() => mockLogger),
+} as unknown as Logger;
 
 describe("createItemHandler", () => {
   it("should create an item successfully", async () => {
@@ -21,7 +29,7 @@ describe("createItemHandler", () => {
       securityLevel: "standard",
     };
 
-    const result = await createItemHandler(itemData);
+    const result = await createItemHandler(itemData, mockLogger);
 
     expect(result.statusCode).toBe(201);
     expect(result.body).toHaveProperty("id");
