@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
-import { createItemHandler } from "../handlers/createItemHandler.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getItemHandler } from "../handlers/getItemHandler.js";
 import type { Logger } from "../shared/logger.js";
+import * as storageModule from "../storage/index.js";
 
 const mockLogger = {
   info: vi.fn(),
@@ -10,22 +10,28 @@ const mockLogger = {
   child: vi.fn(() => mockLogger),
 } as unknown as Logger;
 
-describe("getItemHandler", () => {
-  it("should return 404 for non-existent item", async () => {
-    const result = await getItemHandler("non-existent-id", mockLogger);
+const mockStorage = {
+  createItem: vi.fn(),
+  getItem: vi.fn(),
+  updateItem: vi.fn(),
+  listItems: vi.fn(),
+  createVersion: vi.fn(),
+  getAuditTrail: vi.fn(),
+};
 
-    expect(result.statusCode).toBe(404);
-    expect(result.body).toHaveProperty("error");
-    if ("error" in result.body) {
-      expect(result.body.error).toBe("Item not found");
-    }
+// Mock storage module
+vi.spyOn(storageModule, "storage", "get").mockReturnValue(mockStorage as any);
+
+describe("getItemHandler", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it("should retrieve an existing item", async () => {
-    // First create an item
-    const itemData = {
+  it("should return 200 for existing item", async () => {
+    const mockItem = {
+      id: "test-id-123",
       subject: "AP Calculus",
-      itemType: "free-response",
+      itemType: "free-response" as const,
       difficulty: 4,
       content: {
         question: "Calculate the derivative...",
@@ -34,26 +40,28 @@ describe("getItemHandler", () => {
       },
       metadata: {
         author: "test-author",
-        status: "approved",
+        status: "approved" as const,
         tags: ["calculus", "derivatives"],
+        created: Date.now(),
+        lastModified: Date.now(),
+        version: 1,
       },
-      securityLevel: "standard",
+      securityLevel: "standard" as const,
     };
+    mockStorage.getItem.mockResolvedValue(mockItem);
 
-    const createResult = await createItemHandler(itemData, mockLogger);
-    expect(createResult.body).toHaveProperty("id");
-    if (!("id" in createResult.body)) {
-      throw new Error("Item creation failed");
-    }
-    const itemId = createResult.body.id;
+    const result = await getItemHandler("test-id-123", mockLogger);
 
-    // Then retrieve it
-    const getResult = await getItemHandler(itemId, mockLogger);
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toHaveProperty("id", "test-id-123");
+  });
 
-    expect(getResult.statusCode).toBe(200);
-    expect(getResult.body).toHaveProperty("id", itemId);
-    if ("subject" in getResult.body) {
-      expect(getResult.body.subject).toBe("AP Calculus");
-    }
+  it("should return 404 when storage returns null", async () => {
+    mockStorage.getItem.mockResolvedValue(null);
+
+    const result = await getItemHandler("non-existent-id", mockLogger);
+
+    expect(result.statusCode).toBe(404);
+    expect(result.body).toHaveProperty("error", "Item not found");
   });
 });

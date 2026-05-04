@@ -1,349 +1,200 @@
 # Architecture Documentation
 
-## Overview
+## Data Model Design (DynamoDB)
 
-This system manages exam items with support for versioning, auditing, and scalable retrieval.
-It is designed to run locally for development but targets a **serverless AWS deployment** using:
+### Table: `ExamItems`
 
-* API Gateway (HTTP API)
-* AWS Lambda
-* DynamoDB
+**Primary Key**
 
-The architecture prioritizes:
+* `PK`: `ITEM#<id>`
+* `SK`:
 
-* Simplicity
-* Scalability
-* Clear data modeling
-* Minimal infrastructure
+  * `LATEST` → current version
+  * `VERSION#<n>` → immutable history
 
----
-
-## DynamoDB Storage Design
-
-### Table Schema
-
-**Table Name:** `ExamItems`
-
-**Primary Key:**
-
-* `PK` (Partition Key): `ITEM#<id>`
-* `SK` (Sort Key):
-
-  * `LATEST` for current item
-  * `VERSION#<version>` for version history
-
----
-
-### Item Structure
+### Item Shape (simplified)
 
 ```json
 {
-  "PK": "ITEM#<uuid>",
-  "SK": "LATEST" | "VERSION#<version>",
-  "id": "<uuid>",
-  "subject": "AP Biology",
-  "itemType": "multiple-choice",
-  "difficulty": 3,
+  "PK": "ITEM#<id>",
+  "SK": "LATEST | VERSION#000001",
+  "id": "<id>",
+  "subject": "...",
+  "itemType": "...",
+  "difficulty": 1-5,
   "content": { ... },
-  "metadata": { ... },
-  "securityLevel": "standard"
+  "metadata": {
+    "created": number,
+    "lastModified": number,
+    "version": number,
+    ...
+  },
+  "securityLevel": "..."
 }
 ```
 
 ---
 
-### Indexes
+### Versioning Strategy
 
-| Index   | PK            | SK                       | Purpose                    |
-| ------- | ------------- | ------------------------ | -------------------------- |
-| Primary | `ITEM#<id>`   | `LATEST` / `VERSION#<n>` | Item + version history     |
-| GSI1    | `ENTITY#ITEM` | `CREATED#<timestamp>`    | List all items (paginated) |
+* **Snapshot-based versioning**
+* Each update writes:
 
----
+  1. `VERSION#<n>` (immutable history)
+  2. `LATEST` (current state)
 
-### Write Pattern — LATEST + VERSION
+**Rationale**
 
-Each write that modifies an item produces two records:
-
-1. **Immutable version record**
-
-   ```
-   SK = VERSION#000001
-   ```
-
-2. **Current snapshot**
-
-   ```
-   SK = LATEST
-   ```
-
-Both records store the full item snapshot.
-
-Writes are performed using **`TransactWriteItems`** to guarantee atomicity between the current state and version history.
+* Simple reads (no reconstruction required)
+* Clear audit trail
+* Avoids complexity of diff-based versioning
 
 ---
 
-### Optimistic Locking
+### Access Patterns
 
-Updates enforce concurrency control using:
-
-```
-ConditionExpression: metadata.version = :expectedVersion
-```
-
-This prevents concurrent writes from overwriting each other.
-
----
-
-### Version Ordering
-
-Version numbers are **zero-padded**:
-
-```
-VERSION#000001
-VERSION#000002
-```
-
-This ensures correct lexicographic ordering in DynamoDB queries.
+| Use Case    | Query                                     |
+| ----------- | ----------------------------------------- |
+| Get item    | `PK = ITEM#id`, `SK = LATEST`             |
+| Update item | same as get + write new version           |
+| Audit trail | `PK = ITEM#id`, `SK begins_with VERSION#` |
+| List items  | GSI                                       |
 
 ---
 
-### Global Listing (GSI1)
+### GSI Strategy
 
-To support `GET /api/items`, all `LATEST` records include:
+**GSI1 (listing index)**
 
-```
-GSI1PK = ENTITY#ITEM
-GSI1SK = CREATED#<timestamp>
-```
+* `GSI1PK`: `ENTITY#ITEM`
+* `GSI1SK`: `CREATED#<timestamp>`
 
-This enables:
+Only `LATEST` items are indexed.
 
-* Efficient full-table listing without scans
-* Sorting by creation time
-* Cursor-based pagination using `LastEvaluatedKey`
+**Rationale**
 
-Version records (`VERSION#<n>`) **do not include GSI attributes**, preventing index bloat.
+* Avoids full table scans
+* Enables pagination
+* Keeps index minimal and cost-efficient
 
 ---
 
-## Versioning Model
+## Infrastructure Choices
 
-### Change-Driven Versioning (Primary)
-
-* Every update creates a new immutable version
-* Each version represents a meaningful state transition
-* Full snapshots simplify reads and auditing
-
----
-
-### Snapshot Versioning (`createVersion`)
-
-The `createVersion` method exists to satisfy the interface and provides snapshot-based versioning:
-
-* Creates a new version without requiring changes
-* Increments version number
-* Updates timestamps
-
-This may produce identical versions (except metadata).
-
-Use cases:
-
-* Manual checkpoints
-* Audit snapshots
-* Draft preservation
-
----
-
-## Pagination and Filtering
-
-### In-Memory Implementation
-
-Supports:
-
-* Offset-based pagination
-* Filtering by subject and status
-
----
-
-### DynamoDB Implementation
-
-Supports:
-
-* Cursor-based pagination via `nextKey` (`LastEvaluatedKey`)
-
-Does **not** support:
-
-* Offset-based pagination (inefficient in DynamoDB)
-* Filtering (no GSIs defined for subject/status)
-
-Unsupported parameters are accepted but ignored.
-
----
-
-## Infrastructure (Terraform)
-
-### Overview
-
-The system is deployed using a serverless architecture:
-
-* **API Gateway (HTTP API)** routes requests
-* **AWS Lambda** executes business logic
-* **DynamoDB** stores persistent data
-
----
-
-### Key Infrastructure Decisions
-
-#### API Gateway (HTTP API)
-
-Chosen because:
+### API Gateway (HTTP API)
 
 * Lower cost and latency than REST API
 * Simpler configuration
-* Sufficient for proxy-based routing
-
-Uses:
-
-```
-ANY /{proxy+}
-```
-
-Lambda handles routing internally.
+* Uses proxy routing (`ANY /{proxy+}`)
 
 ---
 
-#### Lambda
+### AWS Lambda
 
-A **single Lambda function** is used.
+* Single Lambda handles all endpoints
+* Internal router maps requests to handlers
 
-Benefits:
+**Trade-off**
 
-* Simple deployment
-* Minimal infrastructure
-
-Trade-offs:
-
-* Larger function size
-* Less isolation between endpoints
+* Simpler deployment vs. reduced isolation between endpoints
 
 ---
 
-#### DynamoDB
+### DynamoDB
 
-* Uses **PAY_PER_REQUEST**
 * Single-table design
-* One GSI aligned with listing endpoint
-
-Benefits:
-
-* No capacity planning
-* Automatic scaling
+* On-demand billing (`PAY_PER_REQUEST`)
+* Minimal GSIs aligned with access patterns
 
 ---
 
-#### IAM
+### IAM
 
-Lambda is granted least-privilege access:
+* Least-privilege access for Lambda:
 
-* `dynamodb:GetItem`
-* `dynamodb:PutItem`
-* `dynamodb:Query`
-* `dynamodb:UpdateItem`
-* `dynamodb:TransactWriteItems`
-
-Access is scoped to:
-
-* The table
-* Its indexes
+  * `GetItem`, `PutItem`, `UpdateItem`, `Query`, `TransactWriteItems`
+* Scoped to table and index ARNs
 
 ---
 
-## Scalability
+## Scalability & Performance
 
-This architecture scales automatically:
+### Scalability
 
-* **Lambda** scales horizontally
-* **DynamoDB** scales via on-demand mode
-* **API Gateway** handles traffic distribution
-
----
-
-### Future Improvements
-
-* Split Lambda into **per-endpoint functions**
-* Introduce **caching layer** (API Gateway / Redis)
-* Add **read replicas / access pattern GSIs**
-* Implement **TTL or archival for old versions**
+* Lambda scales horizontally with demand
+* DynamoDB on-demand scales automatically
+* API Gateway supports high request throughput
 
 ---
 
-## Observability
+### Performance Characteristics
 
-### Current
-
-* CloudWatch logs via Lambda
+* Constant-time reads for current item (`LATEST`)
+* Efficient range queries for version history
+* Indexed access for listing (no scans)
 
 ---
 
-### Improvements
+### Potential Bottlenecks
 
-* Configure **log retention policies**
-* Add **structured logging (JSON)**
-* Enable **API Gateway access logs**
-* Add **CloudWatch metrics + alarms**:
-
-  * Error rates
-  * Latency
-  * Throttling
-
-Optional:
-
-* AWS X-Ray for tracing
+* High version counts per item (large partitions)
+* Single Lambda handling all routes
+* No caching layer for read-heavy workloads
 
 ---
 
 ## Security
 
-### Current
+### Current Approach
 
-* IAM-based access between Lambda and DynamoDB
+* IAM-based access control between Lambda and DynamoDB
+* No authentication layer (out of scope for exercise)
 
 ---
 
-### Improvements
+### Recommended Enhancements
 
-* Enable **KMS encryption for environment variables**
-* Add **authentication (JWT / Cognito / IAM)**
-* Restrict access via:
-
-  * API Gateway authorizers
-  * AWS WAF
-* Separate environments into **different AWS accounts**
+* Add authentication (JWT / Cognito / IAM authorizers)
+* Enable encryption for environment variables (KMS)
+* Apply fine-grained IAM policies
+* Add WAF for production environments
 
 ---
 
 ## Trade-offs
 
-| Decision                 | Benefit      | Trade-off                 |
-| ------------------------ | ------------ | ------------------------- |
-| Single Lambda            | Simplicity   | Less isolation            |
-| HTTP API                 | Lower cost   | Fewer advanced features   |
-| Minimal GSIs             | Lower cost   | Limited querying          |
-| Cursor pagination        | Scalable     | More complex client logic |
-| Full snapshot versioning | Simple reads | More storage              |
+| Decision            | Benefit      | Trade-off                 |
+| ------------------- | ------------ | ------------------------- |
+| Single Lambda       | Simplicity   | Less isolation            |
+| HTTP API            | Lower cost   | Fewer advanced features   |
+| Snapshot versioning | Simple reads | Higher storage usage      |
+| Minimal GSIs        | Lower cost   | Limited query flexibility |
 
 ---
 
-## Future Work
+## Future Improvements
 
-If extended further:
+### Scalability
 
-* Add CI/CD pipeline for Terraform + Lambda
-* Introduce per-endpoint Lambdas
-* Add API Gateway request validation
-* Implement rate limiting and throttling
-* Add integration tests with DynamoDB Local
+* Split into per-endpoint Lambdas
+* Add caching (API Gateway cache or Redis)
+* Introduce additional GSIs (subject, status)
+
+### Observability
+
+* Add metrics and alarms (CloudWatch)
+* Enable distributed tracing (X-Ray)
+
+### Security
+
+* Implement authentication and authorization
+* Multi-account isolation
+* Data access controls based on `securityLevel`
+
+### Data Lifecycle
+
+* Add TTL or archival strategy for old versions
+* Separate hot vs. cold storage if needed
 
 ---
 
