@@ -1,7 +1,7 @@
 import { logger } from '../shared/logger.js';
 import { failure, success, validationFailure } from '../shared/responses.js';
 import { storage } from '../storage/index.js';
-import { itemIdSchema } from '../types/item.js';
+import { itemIdSchema } from '../types/api.js';
 
 export async function getItemHandler(id: unknown) {
   const validationResult = itemIdSchema.safeParse(id);

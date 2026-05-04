@@ -22,8 +22,9 @@ import {
   TransactWriteCommand
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
-import { CreateItemRequest, ExamItem, ListItemsQuery, UpdateItemRequest } from '../types/item.js';
-import { DynamoDBItem, ItemStorage, ListItemsResult } from '../types/storage.js';
+import { CreateItemRequest, ListItemsQuery, ListItemsResult, UpdateItemRequest } from '../types/api.js';
+import { ExamItem } from '../types/item.js';
+import { DynamoDBItem, ItemStorage } from '../types/storage.js';
 
 export class DynamoDBStorage implements ItemStorage {
   private client: DynamoDBDocumentClient;

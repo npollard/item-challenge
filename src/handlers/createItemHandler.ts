@@ -1,7 +1,7 @@
-import { storage } from '../storage/index.js';
-import { success, failure, validationFailure } from '../shared/responses.js';
-import { createItemRequestSchema } from '../types/item.js';
 import { logger } from '../shared/logger.js';
+import { failure, success, validationFailure } from '../shared/responses.js';
+import { storage } from '../storage/index.js';
+import { createItemRequestSchema } from '../types/api.js';
 
 export async function createItemHandler(data: unknown) {
   const validationResult = createItemRequestSchema.safeParse(data);

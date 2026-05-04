@@ -1,8 +1,10 @@
-/**
- * Storage Types
- */
-
-import { CreateItemRequest, ExamItem, ListItemsQuery, UpdateItemRequest } from './item.js';
+import {
+  CreateItemRequest,
+  ListItemsQuery,
+  ListItemsResult,
+  UpdateItemRequest,
+} from './api.js';
+import { ExamItem } from './item.js';
 
 export interface ItemStorage {
   createItem(data: CreateItemRequest): Promise<ExamItem>;
@@ -13,12 +15,9 @@ export interface ItemStorage {
   getAuditTrail(id: string): Promise<ExamItem[]>;
 }
 
-export interface ListItemsResult {
-  items: ExamItem[];
-  total?: number;
-  nextKey?: Record<string, any>;
-}
-
+/**
+ * DynamoDB persistence shape (internal only)
+ */
 export interface DynamoDBItem extends ExamItem {
   PK: string;
   SK: string;
