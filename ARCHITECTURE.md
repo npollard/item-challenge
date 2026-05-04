@@ -141,3 +141,7 @@ This reflects a common tradeoff where a generic interface does not perfectly map
 
 * TypeScript types are derived from Zod schemas where applicable for consistency
 * Logging implemented using Pino
+
+
+## Caveats
+* DynamoDB implementation untested
