@@ -23,7 +23,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { CreateItemRequest, ExamItem, ListItemsQuery, UpdateItemRequest } from '../types/item.js';
-import { DynamoDBItem, ItemStorage } from '../types/storage.js';
+import { DynamoDBItem, ItemStorage, ListItemsResult } from '../types/storage.js';
 
 export class DynamoDBStorage implements ItemStorage {
   private client: DynamoDBDocumentClient;
@@ -162,37 +162,31 @@ export class DynamoDBStorage implements ItemStorage {
     return updated;
   }
 
-  async listItems(query: ListItemsQuery): Promise<{ items: ExamItem[]; total: number }> {
-    if (query.subject) {
-      const result = await this.client.send(new QueryCommand({
-        TableName: this.tableName,
-        IndexName: 'GSI1',
-        KeyConditionExpression: 'GSI1PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': `SUBJECT#${query.subject}`,
-        },
-        Limit: query.limit || 10,
-      }));
-
-      return this.mapResult(result);
+  async listItems(query: ListItemsQuery): Promise<ListItemsResult> {
+    if (query.offset) {
+      console.warn("Offset pagination is not supported in DynamoDB; ignoring offset");
     }
 
-    if (query.status) {
-      const result = await this.client.send(new QueryCommand({
-        TableName: this.tableName,
-        IndexName: 'GSI2',
-        KeyConditionExpression: 'GSI2PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': `STATUS#${query.status}`,
-        },
-        Limit: query.limit || 10,
-      }));
-
-      return this.mapResult(result);
+    if (query.subject || query.status) {
+      console.warn("Filtering by subject/status is not supported in DynamoDB without additional GSIs");
     }
 
-    // fallback: require at least one filter
-    return { items: [], total: 0 };
+    const result = await this.client.send(new QueryCommand({
+      TableName: this.tableName,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
+      ExpressionAttributeValues: {
+        ':pk': 'ENTITY#ITEM',
+      },
+      Limit: query.limit || 10,
+      ExclusiveStartKey: query.nextKey,
+      ScanIndexForward: false, // newest first
+    }));
+
+    return {
+      items: (result.Items || []).map(i => this.stripKeys(i as DynamoDBItem)),
+      nextKey: result.LastEvaluatedKey,
+    };
   }
 
   async createVersion(id: string): Promise<ExamItem | null> {
@@ -247,22 +241,13 @@ export class DynamoDBStorage implements ItemStorage {
       ...item,
       PK: `ITEM#${item.id}`,
       SK: 'LATEST',
-      GSI1PK: `SUBJECT#${item.subject}`,
-      GSI1SK: `DIFFICULTY#${item.difficulty}#TYPE#${item.itemType}`,
-      GSI2PK: `STATUS#${item.metadata.status}`,
-      GSI2SK: `SUBJECT#${item.subject}#CREATED#${item.metadata.created}`,
-      GSI3PK: `SECURITY#${item.securityLevel}`,
-      GSI3SK: `SUBJECT#${item.subject}#DIFFICULTY#${item.difficulty}#TYPE#${item.itemType}`,
+      GSI1PK: 'ENTITY#ITEM',
+      GSI1SK: `CREATED#${item.metadata.created}`,
     };
   }
 
   private stripKeys(item: DynamoDBItem): ExamItem {
-    const { PK, SK, GSI1PK, GSI1SK, GSI2PK, GSI2SK, GSI3PK, GSI3SK, ...rest } = item;
+    const { PK, SK, GSI1PK, GSI1SK, ...rest } = item;
     return rest;
-  }
-
-  private mapResult(result: any) {
-    const items = (result.Items || []).map((i: DynamoDBItem) => this.stripKeys(i));
-    return { items, total: result.Count || 0 };
   }
 }

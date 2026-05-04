@@ -8,9 +8,15 @@ export interface ItemStorage {
   createItem(data: CreateItemRequest): Promise<ExamItem>;
   getItem(id: string): Promise<ExamItem | null>;
   updateItem(id: string, data: UpdateItemRequest): Promise<ExamItem | null>;
-  listItems(query: ListItemsQuery): Promise<{ items: ExamItem[]; total: number }>;
+  listItems(query: ListItemsQuery): Promise<ListItemsResult>;
   createVersion(id: string): Promise<ExamItem | null>;
   getAuditTrail(id: string): Promise<ExamItem[]>;
+}
+
+export interface ListItemsResult {
+  items: ExamItem[];
+  total?: number;
+  nextKey?: Record<string, any>;
 }
 
 export interface DynamoDBItem extends ExamItem {
@@ -18,8 +24,4 @@ export interface DynamoDBItem extends ExamItem {
   SK: string;
   GSI1PK?: string;
   GSI1SK?: string;
-  GSI2PK?: string;
-  GSI2SK?: string;
-  GSI3PK?: string;
-  GSI3SK?: string;
 }

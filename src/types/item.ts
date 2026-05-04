@@ -60,6 +60,7 @@ export interface UpdateItemRequest {
 export interface ListItemsQuery {
   limit?: number;
   offset?: number;
+  nextKey?: Record<string, any>;
   subject?: string;
   status?: string;
 }
