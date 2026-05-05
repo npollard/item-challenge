@@ -1,5 +1,43 @@
 # Architecture Documentation
 
+## Infrastructure Choices
+
+### API Gateway (HTTP API)
+
+* Lower cost and latency than REST API
+* Simpler configuration
+* Uses proxy routing (`ANY /{proxy+}`)
+
+---
+
+### AWS Lambda
+
+* Single Lambda handles all endpoints
+* Internal router maps requests to handlers
+
+**Trade-off**
+
+* Simpler deployment vs. reduced isolation between endpoints
+
+---
+
+### DynamoDB
+
+* Single-table design
+* On-demand billing (`PAY_PER_REQUEST`)
+* Minimal GSIs aligned with access patterns
+
+---
+
+### IAM
+
+* Least-privilege access for Lambda:
+
+  * `GetItem`, `PutItem`, `UpdateItem`, `Query`, `TransactWriteItems`
+* Scoped to table and index ARNs
+
+---
+
 ## Data Model Design (DynamoDB)
 
 ### Table: `ExamItems`
@@ -76,44 +114,6 @@ Only `LATEST` items are indexed.
 * Avoids full table scans
 * Enables pagination
 * Keeps index minimal and cost-efficient
-
----
-
-## Infrastructure Choices
-
-### API Gateway (HTTP API)
-
-* Lower cost and latency than REST API
-* Simpler configuration
-* Uses proxy routing (`ANY /{proxy+}`)
-
----
-
-### AWS Lambda
-
-* Single Lambda handles all endpoints
-* Internal router maps requests to handlers
-
-**Trade-off**
-
-* Simpler deployment vs. reduced isolation between endpoints
-
----
-
-### DynamoDB
-
-* Single-table design
-* On-demand billing (`PAY_PER_REQUEST`)
-* Minimal GSIs aligned with access patterns
-
----
-
-### IAM
-
-* Least-privilege access for Lambda:
-
-  * `GetItem`, `PutItem`, `UpdateItem`, `Query`, `TransactWriteItems`
-* Scoped to table and index ARNs
 
 ---
 
