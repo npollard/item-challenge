@@ -23,4 +23,4 @@ export function createStorage(): ItemStorage {
 // Singleton instance for shared state across handlers
 export const storage = createStorage();
 
-export { ItemStorage } from '../types/storage.js';
+export type { ItemStorage } from '../types/storage.js';
